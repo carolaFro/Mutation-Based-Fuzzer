@@ -2,21 +2,21 @@ package main
 
 import (
 	"fmt"
-	"math/rand"
-	"math"
-	"os"	
-	"strconv"
 	"log"
-	"regexp"
+	"math/rand"
+	"os"
+	"strconv"
+	"strings"
 )
-//variable de claration 
-var (
-	prng_seed uint32
-	num_of_iterations uint32
-	size int64
-	file string
 
+//variable declaration
+var (
+	prng_seed         uint32
+	num_of_iterations uint32
+	size              int64
+	file              string
 )
+
 // this is a default seed taken from the seed0 file provided by the staff.
 func get_default() []byte {
 	return []byte{16, 0, 0, 0, 68, 68, 68, 68, 68, 68, 68, 68, 68, 68, 68, 68, 68, 68, 68, 68, 10}
@@ -24,30 +24,57 @@ func get_default() []byte {
 
 func main() {
 	file = "seed"
-	p_of_32 := uint64(math.Pow(2, 32)) // 2^32 to check for args limits
-	// parameter checking 
-	if (len(os.Args[1]) > 0) && (len(os.Args[2]) > 0) {
-		//checking that args are numerical
-		if regexp.MustCompile(`\d`).MatchString(os.Args[1]) && regexp.MustCompile(`\d`).MatchString(os.Args[2]) {
-			num1, err1 := strconv.ParseUint(os.Args[1], 10, 64) //parsing string input to numbers
-			num2, err2 := strconv.ParseUint(os.Args[2], 10, 64)
-			if (err1 == nil) && (err2 == nil) {
-				if (num1 > 0 && num1 < p_of_32) && (num2 > 0 && num2 < p_of_32) { //checking that args are in within range
-					prng_seed = uint32(num1)
-					num_of_iterations = uint32(num2)
-				} 
+	pOf32 := uint64(1) << 32
 
-			} else {
-				log.Fatal("You need two 32 bit integers")
-			}
+	switch len(os.Args) {
+	case 2:
+		// config file mode
+		configPath := os.Args[1]
+		data, err := os.ReadFile(configPath)
+		if err != nil {
+			log.Fatal(err)
 		}
-	} else {
-		log.Fatal("You need two parameters")
+
+		fields := strings.Fields(string(data))
+		if len(fields) < 2 {
+			log.Fatal("Config must contain: <prng_seed> <num_of_iters>")
+		}
+
+		num1, err1 := strconv.ParseUint(fields[0], 10, 64)
+		num2, err2 := strconv.ParseUint(fields[1], 10, 64)
+		if err1 != nil || err2 != nil {
+			log.Fatal("Config values must be integers")
+		}
+
+		if num1 == 0 || num1 >= pOf32 || num2 == 0 || num2 >= pOf32 {
+			log.Fatal("Values must be 32-bit positive integers")
+		}
+
+		prng_seed = uint32(num1)
+		num_of_iterations = uint32(num2)
+
+	case 3:
+		// two args
+		num1, err1 := strconv.ParseUint(os.Args[1], 10, 64)
+		num2, err2 := strconv.ParseUint(os.Args[2], 10, 64)
+		if err1 != nil || err2 != nil {
+			log.Fatal("You need two 32 bit integers")
+		}
+
+		if num1 == 0 || num1 >= pOf32 || num2 == 0 || num2 >= pOf32 {
+			log.Fatal("Values must be 32-bit positive integers")
+		}
+
+		prng_seed = uint32(num1)
+		num_of_iterations = uint32(num2)
+
+	default:
+		log.Fatal("Usage: ./fuzzer <config_file> OR ./fuzzer <prng_seed> <num_of_iters>")
 	}
-	//cheking if file exists 
+	//cheking if file exists
 	size = 0
 	f, err := os.Stat(file)
-	if err == nil{
+	if err == nil {
 		size = f.Size()
 	} else { //if no fine then I call the default seed (from seed0)
 		size = int64(len(get_default()))
@@ -57,10 +84,10 @@ func main() {
 	if err != nil {
 		seed = get_default()
 	}
-    // main loop
+	// main loop
 	for i := 0; uint32(i) < num_of_iterations; i++ {
 		rand.Seed(int64(prng_seed)) //this seeds all use of rand()
-		if i % 500 == 0 { //checking for every 500 iters to grow the input by 10 bytes
+		if i%500 == 0 {             //checking for every 500 iters to grow the input by 10 bytes
 			for j := 0; j < 10; j++ {
 				seed = append(seed, byte(rand.Intn(255)))
 			}
@@ -73,6 +100,6 @@ func main() {
 		}
 	}
 	out := string(seed[:]) //from slice to string
-	fmt.Println(out) //printing final result
+	fmt.Println(out)       //printing final result
 
 }
